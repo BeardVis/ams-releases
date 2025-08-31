@@ -1,0 +1,17 @@
+name: Upload to Azure Blob Storage
+
+on:
+  workflow_dispatch: # Allows manual triggering of the workflow from the GitHub Actions tab
+
+jobs:
+  microsoft_store:
+    name: Upload
+    environment: store
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run Azure PowerShell Script File
+        uses: azure/powershell@v2
+        with:
+          inlineScript: ./scripts/FileUploadToTheBlob.ps1 ${{ vars.AZURE_BLOB_ACCOUNT_NAME }} ${{ vars.AZURE_BLOB_CONTAINER_NAME }} ${{ secrets.AZURE_BLOB_ACCOUNT_KEY }} ".\testfiel*.txt"
+          azPSVersion: "14.3.0"
