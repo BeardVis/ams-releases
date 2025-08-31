@@ -1,0 +1,53 @@
+name: Store submission on release
+
+on:
+  workflow_dispatch: # Allows manual triggering of the workflow from the GitHub Actions tab
+
+  release:
+    types: [created]
+
+jobs:
+
+  microsoft_store:
+    name: Publish Microsoft Store
+    environment: store
+    runs-on: windows-latest
+    steps:
+      - name: Get latest URL from public releases
+        id: releaseVars
+        run: |
+          $releases = Invoke-RestMethod -Uri "https://api.github.com/repos/BeardVis/ams-releases/releases"
+          $latestRelease = $releases | Where-Object { $_.name -like "*Release*" } | Select-Object -First 1
+          $amsAssets = $latestRelease.assets | Where-Object { $_.name -like "*AMS.UI*" }
+          $amsInstallerX64Url = ($amsAssets | Where-Object { $_.name -like "*x64*" } | Select-Object -First 1).browser_download_url
+          $amsInstallerX86Url = ($amsAssets | Where-Object { $_.name -like "*x86*" } | Select-Object -First 1).browser_download_url
+
+          "amsInstallerX64Url=$amsInstallerX64Url" | Add-Content -Path $env:GITHUB_OUTPUT
+          "amsInstallerX86Url=$amsInstallerX86Url" | Add-Content -Path $env:GITHUB_OUTPUT
+        shell: powershell
+
+      - uses: microsoft/setup-msstore-cli@v1.2
+
+      - run: msstore reconfigure --tenantId ${{ secrets.PARTNER_CENTER_TENANT_ID }} --sellerId ${{ secrets.PARTNER_CENTER_SELLER_ID }} --clientId ${{ secrets.PARTNER_CENTER_CLIENT_ID }} --clientSecret ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+
+      - name: Update draft submission
+        run: |-
+          msstore --verbose submission update ${{ secrets.APP_STORE_ID }} '{
+            "packages":[
+                {
+                  "packageUrl":"${{ steps.releaseVars.outputs.amsInstallerX64Url }}",
+                  "languages":["en-US", "uk-UA"],
+                  "architectures":["X64"],
+                  "installerParameters":"/quiet /norestart",
+                  "isSilentInstall":true
+                },
+                {
+                  "packageUrl":"${{ steps.releaseVars.outputs.amsInstallerX86Url }}",
+                  "languages":["en-US", "uk-UA"],
+                  "architectures":["X86"],
+                  "installerParameters":"/quiet /norestart",
+                  "isSilentInstall":true
+                }
+            ]
+          }'
+            
